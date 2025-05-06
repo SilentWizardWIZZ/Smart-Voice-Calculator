@@ -36,6 +36,6 @@ This project combines **speech recognition** with a **GUI-based calculator** to 
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/SilentWizardWIZZ/smart-voice-calculator.git
+git clone https://github.com/SilentWizardWIZZ/Smart-Voice-Calculator.git
 cd smart-voice-calculator
 
