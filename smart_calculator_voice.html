@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smart Calculator with Voice Input</title>
+<style>
+  body {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    height: 100vh;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 {
+    margin-bottom: 5px;
+    font-weight: 700;
+  }
+  #calculator {
+    background: #2f2f7b;
+    border-radius: 15px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    width: 340px;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  #display {
+    background: #1a1a4f;
+    border-radius: 10px;
+    padding: 15px;
+    font-size: 1.5rem;
+    min-height: 50px;
+    margin-bottom: 15px;
+    word-wrap: break-word;
+    user-select: none;
+  }
+  #voiceStatus {
+    font-size: 1rem;
+    color: #ddd;
+    margin-bottom: 10px;
+    min-height: 18px;
+    min-width: 300px;
+  }
+  button {
+    background: #5a5add;
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: 600;
+    font-size: 1.2rem;
+    width: 70px;
+    height: 50px;
+    margin: 5px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+  }
+  button:hover {
+    background: #4141be;
+  }
+  #buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  #voiceBtn {
+    background: #ff6f61;
+    width: 100%;
+    margin-top: 15px;
+    font-size: 1.3rem;
+  }
+  #result {
+    font-size: 1.2rem;
+    text-align: center;
+    margin-top: 10px;
+    min-height: 24px;
+    color: #adff2f;
+    font-weight: 600;
+  }
+  @media (max-width: 400px) {
+    #calculator {
+      width: 90vw;
+    }
+    button {
+      width: 60px;
+      height: 45px;
+      font-size: 1rem;
+    }
+    #voiceStatus {
+      min-width: auto;
+      text-align: center;
+    }
+  }
+</style>
+</head>
+<body>
+<h1>Smart Calculator with Voice Input</h1>
+<div id="calculator" role="application" aria-label="Calculator">
+  <div id="display" aria-live="polite" aria-atomic="true">0</div>
+  <div id="voiceStatus" aria-live="polite" aria-atomic="true"></div>
+  <div id="buttons">
+    <button aria-label="7">7</button>
+    <button aria-label="8">8</button>
+    <button aria-label="9">9</button>
+    <button aria-label="Divide">÷</button>
+    <button aria-label="4">4</button>
+    <button aria-label="5">5</button>
+    <button aria-label="6">6</button>
+    <button aria-label="Multiply">×</button>
+    <button aria-label="1">1</button>
+    <button aria-label="2">2</button>
+    <button aria-label="3">3</button>
+    <button aria-label="Minus">−</button>
+    <button aria-label="0">0</button>
+    <button aria-label="Decimal Point">.</button>
+    <button aria-label="Clear">C</button>
+    <button aria-label="Plus">+</button>
+    <button aria-label="Equals" style="width: 150px;">=</button>
+  </div>
+  <button id="voiceBtn" aria-pressed="false" aria-label="Start voice input">🎤 Speak Now</button>
+  <div id="result" aria-live="polite" aria-atomic="true"></div>
+</div>
+
+<script>
+(() => {
+  const display = document.getElementById('display');
+  const buttons = document.querySelectorAll('#buttons button');
+  const voiceBtn = document.getElementById('voiceBtn');
+  const voiceStatus = document.getElementById('voiceStatus');
+  const resultArea = document.getElementById('result');
+
+  let expression = '';
+  let listening = false;
+  let recognition = null;
+  
+  // Setup Speech Recognition if available
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+  } else {
+    voiceStatus.textContent = 'Speech recognition not supported in this browser.';
+    voiceBtn.disabled = true;
+  }
+
+  // Sanitize and convert spoken text to math expression
+  function parseVoiceToExpression(text) {
+    // Lowercase and replace words with math operators
+    let expr = text.toLowerCase();
+    expr = expr.replace(/plus/g, '+');
+    expr = expr.replace(/minus/g, '-');
+    expr = expr.replace(/times|multiplied by|multiply/g, '*');
+    expr = expr.replace(/divided by|divide/g, '/');
+    expr = expr.replace(/over/g, '/');
+    expr = expr.replace(/x/g, '*');
+    expr = expr.replace(/point|dot/g, '.');
+    expr = expr.replace(/ /g, '');
+    // Remove any characters not digits, +, -, *, /, ., parentheses
+    expr = expr.replace(/[^0-9+\-*/().]/g, '');
+    return expr;
+  }
+
+  // Evaluate math expression safely
+  function evaluateExpression(expr) {
+    try {
+      // Validate expression to allow only 0-9, +,-,*,/,., parentheses
+      if (!/^[0-9+\-*/().]+$/.test(expr)) throw new Error('Invalid characters in expression');
+      // eslint-disable-next-line no-new-func
+      const func = new Function('return ' + expr);
+      const val = func();
+      if (val === Infinity || val === -Infinity || isNaN(val)) throw new Error('Math error');
+      return val;
+    } catch (e) {
+      return 'Error';
+    }
+  }
+
+  // Update display content
+  function updateDisplay() {
+    display.textContent = expression || '0';
+  }
+
+  // Clear expression and reset
+  function clearAll() {
+    expression = '';
+    updateDisplay();
+    resultArea.textContent = '';
+  }
+
+  // Handle button click
+  buttons.forEach(button => {
+    button.addEventListener('click', () => {
+      const val = button.textContent;
+      if (val === 'C') {
+        clearAll();
+      } else if (val === '=') {
+        const evalResult = evaluateExpression(expression);
+        resultArea.textContent = evalResult === 'Error' ? 'Invalid Expression' : `= ${evalResult}`;
+        expression = evalResult === 'Error' ? '' : String(evalResult);
+        updateDisplay();
+      } else {
+        // Prevent multiple operators in a row
+        const operators = '+-*/';
+        const lastChar = expression.slice(-1);
+        if (operators.includes(val)) {
+          if (expression === '' && val !== '-') return; // Don't start with operator except minus
+          if (operators.includes(lastChar)) {
+            // Replace last operator with new one
+            expression = expression.slice(0, -1) + val;
+          } else {
+            expression += val;
+          }
+        } else {
+          expression += val;
+        }
+        updateDisplay();
+      }
+    });
+  });
+
+  // Voice Recognition Handlers
+  function startListening() {
+    if (!recognition) return;
+    recognition.start();
+    listening = true;
+    voiceBtn.textContent = '🎤 Listening... Click to stop';
+    voiceBtn.setAttribute('aria-pressed', 'true');
+    voiceStatus.textContent = 'Listening... please speak your calculation.';
+  }
+
+  function stopListening() {
+    if (!recognition) return;
+    recognition.stop();
+    listening = false;
+    voiceBtn.textContent = '🎤 Speak Now';
+    voiceBtn.setAttribute('aria-pressed', 'false');
+    voiceStatus.textContent = '';
+  }
+
+  voiceBtn.addEventListener('click', () => {
+    if (listening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  });
+
+  if (recognition) {
+    recognition.addEventListener('result', e => {
+      const transcript = e.results[0][0].transcript;
+      voiceStatus.textContent = `You said: ${transcript}`;
+      const expr = parseVoiceToExpression(transcript);
+      if (!expr) {
+        resultArea.textContent = 'Could not understand the expression.';
+        return;
+      }
+      expression = expr;
+      updateDisplay();
+      const evalRes = evaluateExpression(expression);
+      resultArea.textContent = evalRes === 'Error' ? 'Invalid Expression' : `= ${evalRes}`;
+      if (!listening) voiceBtn.textContent = '🎤 Speak Now';
+    });
+    recognition.addEventListener('end', () => {
+      if (listening) {
+        stopListening();
+      }
+    });
+    recognition.addEventListener('error', e => {
+      voiceStatus.textContent = `Error: ${e.error}`;
+      stopListening();
+    });
+  }
+
+  clearAll();
+
+})();
+</script>
+</body>
+</html>
+
